@@ -263,4 +263,41 @@ defmodule Translations.Tasks.TasksTest do
              )
     end
   end
+
+  describe "assign_all/0" do
+    test "assigns translators to each project" do
+      project_1 =
+        insert(:translation_project,
+          estimated_hours_per_language: 4.0,
+          deadline_in_days: 2,
+          original_language: "HR",
+          target_languages: ["EN", "GE"]
+        )
+
+      project_2 =
+        insert(:translation_project,
+          estimated_hours_per_language: 6.0,
+          deadline_in_days: 2,
+          original_language: "IT",
+          target_languages: ["FR", "RU"]
+        )
+
+      translator_1 = insert(:translator, hours_per_day: 12, known_languages: ["HR", "EN", "GE"])
+      translator_2 = insert(:translator, hours_per_day: 12, known_languages: ["IT", "FR", "RU"])
+
+      assert 2 = Tasks.assign_all()
+
+      assert Tasks.Task
+             |> Repo.get_by(translation_project_id: project_1.id, translator_id: translator_1.id, target_language: "EN")
+
+      assert Tasks.Task
+             |> Repo.get_by(translation_project_id: project_1.id, translator_id: translator_1.id, target_language: "GE")
+
+      assert Tasks.Task
+             |> Repo.get_by(translation_project_id: project_2.id, translator_id: translator_2.id, target_language: "FR")
+
+      assert Tasks.Task
+             |> Repo.get_by(translation_project_id: project_2.id, translator_id: translator_2.id, target_language: "RU")
+    end
+  end
 end

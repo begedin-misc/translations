@@ -25,11 +25,40 @@ defmodule Translations.Tasks do
     |> Repo.update()
   end
 
-  defp assign_tasks(%TranslationProject{target_languages: target_languages} = project) do
+  def assign_all() do
+    projects =
+      TranslationProject
+      |> Repo.all()
+      |> Repo.preload(:tasks)
+      |> Enum.sort_by(&TranslationProject.get_hours_needed/1)
+
+    projects |> iteratively_assign_tasks()
+  end
+
+  defp iteratively_assign_tasks(projects) do
+    [project | rest] = projects
+    first_result = project |> assign_translators()
+    do_iteratively_assign_tasks(rest, first_result)
+  end
+
+  defp do_iteratively_assign_tasks(unassigned_projects, last_result, assigned_count \\ 1)
+
+  defp do_iteratively_assign_tasks([project | rest], {:ok, _prev_assigned_project}, assigned_count) do
+    do_iteratively_assign_tasks(rest, project |> assign_translators(), assigned_count + 1)
+  end
+
+  defp do_iteratively_assign_tasks(_not_yet_assigned, {:error, _error}, assigned_count), do: assigned_count
+  defp do_iteratively_assign_tasks([], _last_result, assigned_count), do: assigned_count
+
+  def get_compatible_translators_grouped_by_target_languages(%TranslationProject{} = project) do
+    translators_data = get_compatible_translator_data(project)
+    project.target_languages |> Enum.map(&pair_with_compatible_translators(&1, translators_data))
+  end
+
+  defp assign_tasks(%TranslationProject{} = project) do
     changeset = project |> Changeset.cast(%{}, [])
 
-    translators_data = get_compatible_translator_data(project)
-    language_data = target_languages |> Enum.map(&pair_with_compatible_translators(&1, translators_data))
+    language_data = project |> get_compatible_translators_grouped_by_target_languages()
 
     if language_data |> Enum.any?(&lacks_translators?/1) do
       changeset |> Changeset.add_error(:tasks, "Not enough compatible translators to complete project in time")

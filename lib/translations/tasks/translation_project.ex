@@ -11,4 +11,8 @@ defmodule Translations.Tasks.TranslationProject do
 
     has_many(:tasks, Translations.Tasks.Task)
   end
+
+  def get_hours_needed(%__MODULE__{} = project) do
+    Enum.count(project.target_languages) * project.estimated_hours_per_language
+  end
 end
