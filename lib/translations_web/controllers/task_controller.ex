@@ -21,8 +21,7 @@ defmodule TranslationsWeb.TaskController do
 
   def assign_tasks(conn, %{"id" => project_id}) do
     with %Tasks.TranslationProject{} = translation_project <- Tasks.find_translation_project(project_id),
-         {:ok, %Tasks.TranslationProject{tasks: tasks} = project_with_assigned_tasks} <-
-           Tasks.assign_translators(translation_project) do
+         {:ok, %Tasks.TranslationProject{tasks: tasks}} <- Tasks.assign_translators(translation_project) do
       conn |> put_status(201) |> json(tasks |> Enum.map(&Map.take(&1, [:id, :translator_id, :target_language])))
     else
       nil ->
@@ -35,7 +34,7 @@ defmodule TranslationsWeb.TaskController do
 
   def get_project_info(conn, %{"id" => project_id}) do
     with %Tasks.TranslationProject{} = translation_project <- Tasks.find_translation_project(project_id),
-         %{} = info <- Tasks.build_info(translation_project) do
+         %{} = info <- Tasks.get_info(translation_project) do
       conn |> put_status(200) |> json(info)
     else
       nil -> conn |> put_status(404) |> json(%{error: "not_found"})

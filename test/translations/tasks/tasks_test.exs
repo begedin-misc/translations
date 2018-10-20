@@ -285,7 +285,7 @@ defmodule Translations.Tasks.TasksTest do
       translator_1 = insert(:translator, hours_per_day: 12, known_languages: ["HR", "EN", "GE"])
       translator_2 = insert(:translator, hours_per_day: 12, known_languages: ["IT", "FR", "RU"])
 
-      assert 2 = Tasks.assign_all()
+      assert {2, 0} = Tasks.assign_all()
 
       assert Tasks.Task
              |> Repo.get_by(translation_project_id: project_1.id, translator_id: translator_1.id, target_language: "EN")
