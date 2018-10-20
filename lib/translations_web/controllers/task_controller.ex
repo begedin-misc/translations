@@ -32,6 +32,11 @@ defmodule TranslationsWeb.TaskController do
     end
   end
 
+  def assign_all(conn, %{}) do
+    {assigned, failed} = Tasks.assign_all()
+    conn |> put_status(201) |> json(%{assigned: assigned, failed: failed})
+  end
+
   def get_project_info(conn, %{"id" => project_id}) do
     with %Tasks.TranslationProject{} = translation_project <- Tasks.find_translation_project(project_id),
          %{} = info <- Tasks.get_info(translation_project) do

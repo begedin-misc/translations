@@ -299,6 +299,41 @@ defmodule Translations.Tasks.TasksTest do
       assert Tasks.Task
              |> Repo.get_by(translation_project_id: project_2.id, translator_id: translator_2.id, target_language: "RU")
     end
+
+    test "returns failure counts if some assignments failed" do
+      project_1 =
+        insert(:translation_project,
+          estimated_hours_per_language: 4.0,
+          deadline_in_days: 2,
+          original_language: "HR",
+          target_languages: ["EN", "GE"]
+        )
+
+      project_2 =
+        insert(:translation_project,
+          estimated_hours_per_language: 50.0,
+          deadline_in_days: 1,
+          original_language: "IT",
+          target_languages: ["FR", "RU"]
+        )
+
+      translator_1 = insert(:translator, hours_per_day: 12, known_languages: ["HR", "EN", "GE"])
+      translator_2 = insert(:translator, hours_per_day: 12, known_languages: ["IT", "FR", "RU"])
+
+      assert {1, 1} = Tasks.assign_all()
+
+      assert Tasks.Task
+             |> Repo.get_by(translation_project_id: project_1.id, translator_id: translator_1.id, target_language: "EN")
+
+      assert Tasks.Task
+             |> Repo.get_by(translation_project_id: project_1.id, translator_id: translator_1.id, target_language: "GE")
+
+      refute Tasks.Task
+             |> Repo.get_by(translation_project_id: project_2.id, translator_id: translator_2.id, target_language: "FR")
+
+      refute Tasks.Task
+             |> Repo.get_by(translation_project_id: project_2.id, translator_id: translator_2.id, target_language: "RU")
+    end
   end
 
   describe "get_project_info/1" do

@@ -137,16 +137,16 @@ defmodule Translations.Tasks do
     do_iteratively_assign_tasks(rest, first_result)
   end
 
-  defp do_iteratively_assign_tasks(unassigned_projects, last_result, assigned_count \\ 1)
+  defp do_iteratively_assign_tasks(unassigned_projects, last_result, assigned_count \\ 0)
 
   defp do_iteratively_assign_tasks([project | rest], {:ok, _prev_assigned_project}, assigned_count) do
     do_iteratively_assign_tasks(rest, project |> assign_translators(), assigned_count + 1)
   end
 
   defp do_iteratively_assign_tasks(not_yet_assigned, {:error, _error}, assigned_count),
-    do: {assigned_count, Enum.count(not_yet_assigned)}
+    do: {assigned_count, Enum.count(not_yet_assigned) + 1}
 
-  defp do_iteratively_assign_tasks([], _last_result, assigned_count), do: {assigned_count, 0}
+  defp do_iteratively_assign_tasks([], {:ok, _}, assigned_count), do: {assigned_count + 1, 0}
 
   def get_compatible_translators_grouped_by_target_languages(%TranslationProject{} = project) do
     translators_data = get_compatible_translator_data(project)
