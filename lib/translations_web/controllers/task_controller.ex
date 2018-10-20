@@ -5,8 +5,8 @@ defmodule TranslationsWeb.TaskController do
 
   def assign_task(conn, %{"project_id" => project_id, "translator_id" => translator_id}) do
     with %Tasks.Translator{} = translator <- Tasks.find_translator(translator_id),
-         %Tasks.TranslationProject{} = translation_project <- Tasks.find_translation_project(project_id),
-         {:ok, %Tasks.Task{} = task} <- Tasks.assign(translator, translation_project) do
+         %Tasks.TranslationProject{} = project <- Tasks.find_translation_project(project_id),
+         {:ok, %Tasks.Task{} = task} <- Tasks.assign_translator(project, translator) do
       conn
       |> put_status(201)
       |> json(task |> Map.take([:id, :target_language, :translator_id, :translation_project_id]))

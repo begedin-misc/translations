@@ -8,7 +8,7 @@ defmodule Translations.Tasks do
 
   def find_translation_project(id), do: TranslationProject |> Repo.get(id)
 
-  def assign(%Translator{} = translator, %TranslationProject{} = translation_project) do
+  def assign_translator(%TranslationProject{} = translation_project, %Translator{} = translator) do
     %Task{}
     |> Changeset.cast(%{}, [])
     |> Changeset.put_assoc(:translator, translator)
@@ -19,11 +19,10 @@ defmodule Translations.Tasks do
   end
 
   def assign_translators(%TranslationProject{} = project) do
-    changeset =
-      project
-      |> Repo.preload(:tasks)
-      |> assign_tasks()
-      |> Repo.update()
+    project
+    |> Repo.preload(:tasks)
+    |> assign_tasks()
+    |> Repo.update()
   end
 
   defp assign_tasks(%TranslationProject{target_languages: target_languages} = project) do
@@ -89,7 +88,7 @@ defmodule Translations.Tasks do
       days_to_complete = (hours_assigned || 0) + project_hours_per_language / hours_per_day
       {id, known_languages, hours_per_day, days_to_complete}
     end)
-    |> Enum.filter(fn {_id, _known_languages, per_day, days_to_complete} -> days_to_complete < deadline_in_days end)
+    |> Enum.filter(fn {_id, _known_languages, _per_day, days_to_complete} -> days_to_complete < deadline_in_days end)
   end
 
   defp pair_with_compatible_translators(language, translators_data) do
@@ -129,44 +128,30 @@ defmodule Translations.Tasks do
 
   defp pick_language(
          %Changeset{} = changeset,
-         %Translator{known_languages: known_languages, hours_per_day: hours_per_day} = translator,
-         %TranslationProject{
-           original_language: original_language,
-           target_languages: target_languages,
-           estimated_hours_per_language: estimated_hours,
-           deadline_in_days: deadline
-         } = project
+         %Translator{known_languages: known_languages} = translator,
+         %TranslationProject{original_language: original_language, target_languages: target_languages} = project
        ) do
-    with :known <- known_status(translator, original_language),
+    with :language_known <- known_status(translator, original_language),
          :deadline_reachable <- deadline_status(translator, project),
          compatible_languages when compatible_languages != [] <-
            get_compatible_languages(known_languages, target_languages),
-         available_languages when available_languages != [] <- get_available_languages(project, compatible_languages),
-         true <- estimated_hours / hours_per_day <= deadline do
-      changeset |> Changeset.put_change(:target_language, available_languages |> Enum.random())
+         available_languages when available_languages != [] <- get_available_languages(project, compatible_languages) do
+      changeset |> Changeset.put_change(:target_language, available_languages |> List.first())
     else
-      :unknown ->
+      :language_unknown ->
         changeset |> Changeset.add_error(:target_language, "Original language not known by translator.")
 
       :deadline_unreachable ->
-        changeset
-        |> Changeset.add_error(
-          :target_language,
-          "Translator's available time prevent him from completing the assignment within the deadline."
-        )
+        changeset |> Changeset.add_error(:target_language, "Translator cannot reach deadline.")
 
       [] ->
         changeset
         |> Changeset.add_error(:target_language, "Available languages incompatible with translators known languages.")
-
-      false ->
-        changeset
-        |> Changeset.add_error(:target_language, "Translator is unable to complete translation in time.")
     end
   end
 
   defp known_status(%Translator{known_languages: known_languages}, original_language) do
-    if original_language in known_languages, do: :known, else: :unknown
+    if original_language in known_languages, do: :language_known, else: :language_unknown
   end
 
   defp deadline_status(
@@ -176,13 +161,13 @@ defmodule Translations.Tasks do
            deadline_in_days: deadline_in_days
          }
        ) do
-    total_hours =
+    assigned_hours =
       TranslationProject
       |> join(:right, [p], t in Task, t.translation_project_id == p.id and t.translator_id == ^id)
       |> select([p, t], struct(p, [:estimated_hours_per_language]))
       |> Repo.aggregate(:sum, :estimated_hours_per_language)
 
-    days_needed = (total_hours || 0) / hours_per_day
+    days_needed = ((assigned_hours || 0) + estimated_hours_per_language) / hours_per_day
     if days_needed > deadline_in_days, do: :deadline_unreachable, else: :deadline_reachable
   end
 
@@ -192,7 +177,7 @@ defmodule Translations.Tasks do
     known_set |> MapSet.intersection(target_set) |> MapSet.to_list()
   end
 
-  def get_available_languages(%TranslationProject{id: id, target_languages: target_languages}, compatible_languages) do
+  def get_available_languages(%TranslationProject{id: id}, compatible_languages) do
     taken_languages =
       Task
       |> where([t], t.translation_project_id == ^id)
@@ -202,6 +187,6 @@ defmodule Translations.Tasks do
       |> MapSet.new()
 
     compatible_set = compatible_languages |> MapSet.new()
-    compatible_set |> MapSet.difference(taken_languages)
+    compatible_set |> MapSet.difference(taken_languages) |> MapSet.to_list()
   end
 end
