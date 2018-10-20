@@ -70,9 +70,9 @@ defmodule TranslationsWeb.TaskControllerTest do
       _slow_ge_translator = insert(:translator, known_languages: ["EN", "GE"], hours_per_day: 2.0)
       fast_ge_translator = insert(:translator, known_languages: ["EN", "GE"], hours_per_day: 8.0)
       it_translator = insert(:translator, known_languages: ["EN", "IT"], hours_per_day: 8.0)
-      _slow_fr_translator = insert(:translator, known_languages: ["EN", "FR", "GE"], hours_per_day: 8.0)
-      fast_fr_translator = insert(:translator, known_languages: ["EN", "FR", "GE"], hours_per_day: 10.0)
-      hr_translator = insert(:translator, known_languages: ["EN", "HR"], hours_per_day: 10.0)
+      _slow_fr_translator = insert(:translator, known_languages: ["EN", "FR"], hours_per_day: 2.0)
+      fast_fr_translator = insert(:translator, known_languages: ["EN", "FR"], hours_per_day: 9.0)
+      hr_translator = insert(:translator, known_languages: ["EN", "HR"], hours_per_day: 8.0)
 
       path = task_path(conn, :assign_tasks, project)
       assert json = conn |> post(path) |> json_response(201)

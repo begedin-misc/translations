@@ -1,5 +1,5 @@
 defmodule Translations.Tasks do
-  alias Translations.{Tasks.Translator, Tasks.TranslationProject, Tasks.Task, Repo}
+  alias Translations.{Tasks.Translator, Tasks.TranslationProject, Tasks.Task, Repo, Utils}
   alias Ecto.Changeset
 
   import Ecto.Query
@@ -34,20 +34,21 @@ defmodule Translations.Tasks do
     if language_data |> Enum.any?(&lacks_translators?/1) do
       changeset |> Changeset.add_error(:tasks, "Not enough compatible translators to complete project in time")
     else
-      assignment =
-        language_data
-        |> pair_with_individual_translators()
-        |> full_combine()
-        |> discard_duplicate_assignments()
-        |> Enum.min_by(&slowest_assignee/1)
+      assignments = language_data |> pair_with_individual_translators() |> Utils.combine_nested_list()
 
-      task_params =
-        assignment
-        |> Enum.map(fn {target_language, {translator_id, _, _, _}} ->
-          %{translator_id: translator_id, translation_project_id: project.id, target_language: target_language}
-        end)
+      if assignments == [] do
+        changeset |> Changeset.add_error(:tasks, "Not enough compatible translators to complete project in time")
+      else
+        assignment = assignments |> Enum.min_by(&slowest_assignee_in_group/1)
 
-      changeset |> Changeset.cast(%{tasks: task_params}, []) |> Changeset.cast_assoc(:tasks)
+        task_params =
+          assignment
+          |> Enum.map(fn {target_language, {translator_id, _, _, _}} ->
+            %{translator_id: translator_id, translation_project_id: project.id, target_language: target_language}
+          end)
+
+        changeset |> Changeset.cast(%{tasks: task_params}, []) |> Changeset.cast_assoc(:tasks)
+      end
     end
   end
 
@@ -105,25 +106,11 @@ defmodule Translations.Tasks do
     end)
   end
 
-  defp full_combine([head_list | tail_lists]) when is_list(tail_lists) and tail_lists != [] do
-    tail_combinations = tail_lists |> full_combine()
-
-    head_list
-    |> Enum.reduce([], fn head, acc -> acc ++ (tail_combinations |> Enum.map(fn tail -> [head] ++ tail end)) end)
-  end
-
-  defp full_combine([last_language | rest]) when is_list(last_language) and rest == [], do: [last_language]
-
-  defp discard_duplicate_assignments(assignments) do
-    assignments
-    |> Enum.filter(fn combination ->
-      ids = combination |> Enum.map(fn {_, {id, _, _, _}} -> id end)
-      ids |> Enum.uniq() == ids
-    end)
-  end
-
-  defp slowest_assignee(assignment) do
-    assignment |> Enum.min_by(fn {_, {_, _, _, days_to_complete}} -> days_to_complete end)
+  defp slowest_assignee_in_group(assignment) do
+    assignment
+    |> Enum.group_by(fn {_, {id, _, _, _}} -> id end)
+    |> Enum.map(fn {_id, assignments} -> assignments |> Enum.reduce(0, fn {_, {_, _, _, x}}, acc -> acc + x end) end)
+    |> Enum.max()
   end
 
   defp pick_language(

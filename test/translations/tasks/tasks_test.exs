@@ -120,4 +120,147 @@ defmodule Translations.Tasks.TasksTest do
       assert error =~ "incompatible"
     end
   end
+
+  describe "assign_translators/1" do
+    test "assigns a translator for each project target language" do
+      project =
+        insert(:translation_project,
+          original_language: "EN",
+          target_languages: ["GE", "IT", "FR", "HR"],
+          estimated_hours_per_language: 8.0,
+          deadline_in_days: 2
+        )
+
+      ge_translator = insert(:translator, known_languages: ["EN", "GE"], hours_per_day: 8.0)
+      it_translator = insert(:translator, known_languages: ["EN", "IT"], hours_per_day: 8.0)
+      fr_translator = insert(:translator, known_languages: ["EN", "FR", "GE"], hours_per_day: 10.0)
+      hr_translator = insert(:translator, known_languages: ["EN", "HR"], hours_per_day: 10.0)
+
+      assert {:ok, _updated_project} = Tasks.assign_translators(project)
+
+      assert Tasks.Task
+             |> Repo.get_by(translation_project_id: project.id, translator_id: ge_translator.id, target_language: "GE")
+
+      assert Tasks.Task
+             |> Repo.get_by(translation_project_id: project.id, translator_id: it_translator.id, target_language: "IT")
+
+      assert Tasks.Task
+             |> Repo.get_by(translation_project_id: project.id, translator_id: fr_translator.id, target_language: "FR")
+
+      assert Tasks.Task
+             |> Repo.get_by(translation_project_id: project.id, translator_id: hr_translator.id, target_language: "HR")
+    end
+
+    test "opts for the combination with the quickest completion time" do
+      project =
+        insert(:translation_project,
+          original_language: "EN",
+          target_languages: ["GE", "IT", "FR", "HR"],
+          estimated_hours_per_language: 8.0,
+          deadline_in_days: 2
+        )
+
+      _slow_ge_translator = insert(:translator, known_languages: ["EN", "GE"], hours_per_day: 8.0)
+      ge_translator = insert(:translator, known_languages: ["EN", "GE"], hours_per_day: 10.0)
+      it_translator = insert(:translator, known_languages: ["EN", "IT"], hours_per_day: 10.0)
+      _slow_fr_translator = insert(:translator, known_languages: ["EN", "FR"], hours_per_day: 8.0)
+      fr_translator = insert(:translator, known_languages: ["EN", "FR"], hours_per_day: 10.0)
+      hr_translator = insert(:translator, known_languages: ["EN", "HR"], hours_per_day: 10.0)
+
+      assert {:ok, _updated_project} = Tasks.assign_translators(project)
+
+      assert Tasks.Task
+             |> Repo.get_by(translation_project_id: project.id, translator_id: ge_translator.id, target_language: "GE")
+
+      assert Tasks.Task
+             |> Repo.get_by(translation_project_id: project.id, translator_id: it_translator.id, target_language: "IT")
+
+      assert Tasks.Task
+             |> Repo.get_by(translation_project_id: project.id, translator_id: fr_translator.id, target_language: "FR")
+
+      assert Tasks.Task
+             |> Repo.get_by(translation_project_id: project.id, translator_id: hr_translator.id, target_language: "HR")
+    end
+
+    test "performs no assignments if not all languages can be covered" do
+      project =
+        insert(:translation_project,
+          original_language: "EN",
+          target_languages: ["GE", "IT", "FR", "HR"],
+          estimated_hours_per_language: 8.0,
+          deadline_in_days: 2
+        )
+
+      _ge_translator = insert(:translator, known_languages: ["EN", "GE"], hours_per_day: 8.0)
+      _it_translator = insert(:translator, known_languages: ["EN", "IT"], hours_per_day: 8.0)
+      _fr_translator = insert(:translator, known_languages: ["EN", "FR", "GE"], hours_per_day: 10.0)
+
+      assert {:error, changeset} = Tasks.assign_translators(project)
+      assert {message, []} = changeset.errors[:tasks]
+      assert message =~ "Not enough compatible translators"
+      refute Repo.one(Tasks.Task)
+    end
+
+    test "performs no assignments if any covered language cannot be completed in time" do
+      project =
+        insert(:translation_project,
+          original_language: "EN",
+          target_languages: ["GE", "IT", "FR", "HR"],
+          estimated_hours_per_language: 8.0,
+          deadline_in_days: 2
+        )
+
+      _too_slow_ge_translator = insert(:translator, known_languages: ["EN", "GE"], hours_per_day: 1.0)
+      _it_translator = insert(:translator, known_languages: ["EN", "IT"], hours_per_day: 8.0)
+      _fr_translator = insert(:translator, known_languages: ["EN", "FR"], hours_per_day: 8.0)
+      _hr_translator = insert(:translator, known_languages: ["EN", "HR"], hours_per_day: 8.0)
+
+      assert {:error, changeset} = Tasks.assign_translators(project)
+      assert {message, []} = changeset.errors[:tasks]
+      assert message =~ "Not enough compatible translators"
+      refute Repo.one(Tasks.Task)
+    end
+
+    test "performs assignments if translator can complete multiple languages in time" do
+      project =
+        insert(:translation_project,
+          original_language: "EN",
+          target_languages: ["GE", "IT", "FR", "HR"],
+          estimated_hours_per_language: 2.0,
+          deadline_in_days: 2
+        )
+
+      speedy_translator = insert(:translator, known_languages: ["EN", "GE", "IT", "FR", "HR"], hours_per_day: 8.0)
+
+      assert {:ok, _updated_project} = Tasks.assign_translators(project)
+
+      assert Tasks.Task
+             |> Repo.get_by(
+               translation_project_id: project.id,
+               translator_id: speedy_translator.id,
+               target_language: "GE"
+             )
+
+      assert Tasks.Task
+             |> Repo.get_by(
+               translation_project_id: project.id,
+               translator_id: speedy_translator.id,
+               target_language: "IT"
+             )
+
+      assert Tasks.Task
+             |> Repo.get_by(
+               translation_project_id: project.id,
+               translator_id: speedy_translator.id,
+               target_language: "FR"
+             )
+
+      assert Tasks.Task
+             |> Repo.get_by(
+               translation_project_id: project.id,
+               translator_id: speedy_translator.id,
+               target_language: "HR"
+             )
+    end
+  end
 end
