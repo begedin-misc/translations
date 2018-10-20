@@ -26,27 +26,6 @@ defmodule Translations.Tasks do
       |> Repo.update()
   end
 
-  def build_info(%TranslationProject{} = project) do
-    project = project |> Repo.preload(tasks: :translator)
-
-    translators =
-      project.tasks
-      |> Enum.reduce(%{}, fn %{target_language: target_language, translator: translator}, acc ->
-        acc |> Map.put(target_language, translator |> Map.take([:id, :name, :hours_per_day, :known_languages]))
-      end)
-
-    slowest_translator_completion_time =
-      translators
-      |> Enum.reduce(0, fn {_language, %{hours_per_day: hours_per_day}}, max_days_needed ->
-        days_needed = project.estimated_hours_per_language / hours_per_day
-        if days_needed > max_days_needed, do: days_needed, else: max_days_needed
-      end)
-
-    project
-    |> Map.take([:id, :original_language, :target_languages, :estimated_hours_per_language, :deadline_in_days])
-    |> Map.merge(%{translators: translators, will_complete_in_days: slowest_translator_completion_time})
-  end
-
   defp assign_tasks(%TranslationProject{target_languages: target_languages} = project) do
     changeset = project |> Changeset.cast(%{}, [])
 
@@ -71,6 +50,27 @@ defmodule Translations.Tasks do
 
       changeset |> Changeset.cast(%{tasks: task_params}, []) |> Changeset.cast_assoc(:tasks)
     end
+  end
+
+  def build_info(%TranslationProject{} = project) do
+    project = project |> Repo.preload(tasks: :translator)
+
+    translators =
+      project.tasks
+      |> Enum.reduce(%{}, fn %{target_language: target_language, translator: translator}, acc ->
+        acc |> Map.put(target_language, translator |> Map.take([:id, :name, :hours_per_day, :known_languages]))
+      end)
+
+    slowest_translator_completion_time =
+      translators
+      |> Enum.reduce(0, fn {_language, %{hours_per_day: hours_per_day}}, max_days_needed ->
+        days_needed = project.estimated_hours_per_language / hours_per_day
+        if days_needed > max_days_needed, do: days_needed, else: max_days_needed
+      end)
+
+    project
+    |> Map.take([:id, :original_language, :target_languages, :estimated_hours_per_language, :deadline_in_days])
+    |> Map.merge(%{translators: translators, will_complete_in_days: slowest_translator_completion_time})
   end
 
   defp get_compatible_translator_data(%TranslationProject{

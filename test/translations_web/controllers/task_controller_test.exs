@@ -133,10 +133,43 @@ defmodule TranslationsWeb.TaskControllerTest do
 
   describe "GET /api/project/:id" do
     test "renders project info", %{conn: conn} do
-      project = insert(:translation_project)
-      [_task_1, _task_2] = insert_pair(:task, translation_project: project)
+      project =
+        insert(:translation_project,
+          estimated_hours_per_language: 9.0,
+          deadline_in_days: 2,
+          original_language: "HR",
+          target_languages: ["EN", "GE"]
+        )
+
+      translator_1 = insert(:translator, known_languages: ["HR", "GE"], hours_per_day: 9.0)
+      insert(:task, translator: translator_1, translation_project: project, target_language: "GE")
+      translator_2 = insert(:translator, known_languages: ["HR", "EN"], hours_per_day: 6.0)
+      insert(:task, translator: translator_2, translation_project: project, target_language: "EN")
+
       path = task_path(conn, :get_project_info, project)
       assert json = conn |> get(path) |> json_response(200)
+
+      assert json["id"] == project.id
+      assert json["estimated_hours_per_language"] == 9.0
+      assert json["deadline_in_days"] == 2
+      assert json["original_language"] == "HR"
+      assert json["target_languages"] == ["EN", "GE"]
+
+      assert json["translators"]["GE"] ==
+               %{
+                 "id" => translator_1.id,
+                 "name" => translator_1.name,
+                 "known_languages" => ["HR", "GE"],
+                 "hours_per_day" => 9.0
+               }
+
+      assert json["translators"]["EN"] ==
+               %{
+                 "id" => translator_2.id,
+                 "name" => translator_2.name,
+                 "known_languages" => ["HR", "EN"],
+                 "hours_per_day" => 6.0
+               }
     end
 
     test "renders 404 if project not found", %{conn: conn} do
