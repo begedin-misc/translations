@@ -11,7 +11,10 @@ defmodule Translations.Tasks.Task do
     belongs_to(:translation_project, Translations.Tasks.TranslationProject)
   end
 
-  def changeset(struct, params) do
+  @doc """
+  Changeset used to cast task parameters when inserting a has_many relationship
+  """
+  def changeset(struct, %{} = params) do
     struct
     |> Changeset.cast(params, [:target_language, :translator_id, :translation_project_id])
     |> Changeset.validate_required(:translator_id)

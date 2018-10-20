@@ -196,7 +196,7 @@ defmodule Translations.Tasks.TasksTest do
       _fr_translator = insert(:translator, known_languages: ["EN", "FR", "GE"], hours_per_day: 10.0)
 
       assert {:error, changeset} = Tasks.assign_translators(project)
-      assert {message, []} = changeset.errors[:tasks]
+      assert {message, _} = changeset.errors[:tasks]
       assert message =~ "Not enough compatible translators"
       refute Repo.one(Tasks.Task)
     end
@@ -216,7 +216,7 @@ defmodule Translations.Tasks.TasksTest do
       _hr_translator = insert(:translator, known_languages: ["EN", "HR"], hours_per_day: 8.0)
 
       assert {:error, changeset} = Tasks.assign_translators(project)
-      assert {message, []} = changeset.errors[:tasks]
+      assert {message, _} = changeset.errors[:tasks]
       assert message =~ "Not enough compatible translators"
       refute Repo.one(Tasks.Task)
     end
@@ -298,6 +298,95 @@ defmodule Translations.Tasks.TasksTest do
 
       assert Tasks.Task
              |> Repo.get_by(translation_project_id: project_2.id, translator_id: translator_2.id, target_language: "RU")
+    end
+  end
+
+  describe "get_project_info/1" do
+    test "shows correct basic project info" do
+      project =
+        insert(:translation_project,
+          original_language: "HR",
+          target_languages: ["EN", "GE"],
+          estimated_hours_per_language: 8.0,
+          deadline_in_days: 2
+        )
+
+      assert project |> Tasks.get_info() == %{
+               id: project.id,
+               translators: %{},
+               original_language: "HR",
+               target_languages: ["EN", "GE"],
+               estimated_hours_per_language: 8.0,
+               deadline_in_days: 2,
+               will_complete_in_days: nil
+             }
+    end
+
+    test "shows assigned translators and completion time correctly" do
+      project =
+        insert(:translation_project,
+          original_language: "HR",
+          target_languages: ["EN", "GE"],
+          estimated_hours_per_language: 8.0,
+          deadline_in_days: 2
+        )
+
+      translator_1 = insert(:translator, known_languages: ["HR", "EN"], hours_per_day: 7.0, name: "Joe")
+      insert(:task, translation_project: project, translator: translator_1, target_language: "EN")
+      translator_2 = insert(:translator, known_languages: ["HR", "GE"], hours_per_day: 4.0, name: "James")
+      insert(:task, translation_project: project, translator: translator_2, target_language: "GE")
+
+      info = project |> Tasks.get_info()
+
+      assert info[:translators] == %{
+               "EN" => %{
+                 hours_per_day: 7.0,
+                 id: translator_1.id,
+                 known_languages: ["HR", "EN"],
+                 name: "Joe"
+               },
+               "GE" => %{
+                 hours_per_day: 4.0,
+                 id: translator_2.id,
+                 known_languages: ["HR", "GE"],
+                 name: "James"
+               }
+             }
+
+      assert info[:will_complete_in_days] == 2.0
+    end
+
+    test "shows assigned translators and completion time correctly when one translator is assigned to multiple languages" do
+      project =
+        insert(:translation_project,
+          original_language: "HR",
+          target_languages: ["EN", "GE"],
+          estimated_hours_per_language: 8.0,
+          deadline_in_days: 2
+        )
+
+      translator_1 = insert(:translator, known_languages: ["HR", "EN", "GE"], hours_per_day: 8.0, name: "Joe")
+      insert(:task, translation_project: project, translator: translator_1, target_language: "EN")
+      insert(:task, translation_project: project, translator: translator_1, target_language: "GE")
+
+      info = project |> Tasks.get_info()
+
+      assert info[:translators] == %{
+               "EN" => %{
+                 hours_per_day: 8.0,
+                 id: translator_1.id,
+                 known_languages: ["HR", "EN", "GE"],
+                 name: "Joe"
+               },
+               "GE" => %{
+                 hours_per_day: 8.0,
+                 id: translator_1.id,
+                 known_languages: ["HR", "EN", "GE"],
+                 name: "Joe"
+               }
+             }
+
+      assert info[:will_complete_in_days] == 2.0
     end
   end
 end
