@@ -334,6 +334,43 @@ defmodule Translations.Tasks.TasksTest do
       refute Tasks.Task
              |> Repo.get_by(translation_project_id: project_2.id, translator_id: translator_2.id, target_language: "RU")
     end
+
+    test "continues with remaining tasks when one fails" do
+      project_1 =
+        insert(:translation_project,
+          estimated_hours_per_language: 4.0,
+          deadline_in_days: 2,
+          original_language: "HR",
+          target_languages: ["EN"]
+        )
+
+      _project_2 =
+        insert(:translation_project,
+          estimated_hours_per_language: 5.0,
+          deadline_in_days: 2,
+          original_language: "IT",
+          target_languages: ["FR"]
+        )
+
+      project_2 =
+        insert(:translation_project,
+          estimated_hours_per_language: 5.0,
+          deadline_in_days: 2,
+          original_language: "ES",
+          target_languages: ["TU"]
+        )
+
+      translator_1 = insert(:translator, hours_per_day: 12, known_languages: ["HR", "EN"])
+      translator_2 = insert(:translator, hours_per_day: 12, known_languages: ["ES", "TU"])
+
+      assert {2, 1} = Tasks.assign_all()
+
+      assert Tasks.Task
+             |> Repo.get_by(translation_project_id: project_1.id, translator_id: translator_1.id, target_language: "EN")
+
+      assert Tasks.Task
+             |> Repo.get_by(translation_project_id: project_2.id, translator_id: translator_2.id, target_language: "TU")
+    end
   end
 
   describe "get_project_info/1" do

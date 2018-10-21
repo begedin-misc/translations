@@ -88,13 +88,15 @@ defmodule Translations.Tasks do
   """
   @spec assign_all() :: {integer, integer}
   def assign_all() do
-    projects =
-      TranslationProject
-      |> Repo.all()
-      |> Repo.preload(:tasks)
-      |> Enum.sort_by(&TranslationProject.get_hours_needed/1)
-
-    projects |> iteratively_assign_tasks()
+    TranslationProject
+    |> Repo.all()
+    |> Repo.preload(:tasks)
+    |> Enum.sort_by(&TranslationProject.get_hours_needed/1)
+    |> Enum.map(&assign_translators/1)
+    |> Enum.reduce({0, 0}, fn
+      {:ok, _}, {success_count, failure_count} -> {success_count + 1, failure_count}
+      {:error, _}, {success_count, failure_count} -> {success_count, failure_count + 1}
+    end)
   end
 
   @doc """
@@ -129,24 +131,6 @@ defmodule Translations.Tasks do
     |> Map.take([:id, :original_language, :target_languages, :estimated_hours_per_language, :deadline_in_days])
     |> Map.merge(%{translators: translator_data, will_complete_in_days: will_complete_in_days})
   end
-
-  @spec iteratively_assign_tasks(list(TranslationProject.t())) :: {integer, integer}
-  defp iteratively_assign_tasks(projects) do
-    [project | rest] = projects
-    first_result = project |> assign_translators()
-    do_iteratively_assign_tasks(rest, first_result)
-  end
-
-  defp do_iteratively_assign_tasks(unassigned_projects, last_result, assigned_count \\ 0)
-
-  defp do_iteratively_assign_tasks([project | rest], {:ok, _prev_assigned_project}, assigned_count) do
-    do_iteratively_assign_tasks(rest, project |> assign_translators(), assigned_count + 1)
-  end
-
-  defp do_iteratively_assign_tasks(not_yet_assigned, {:error, _error}, assigned_count),
-    do: {assigned_count, Enum.count(not_yet_assigned) + 1}
-
-  defp do_iteratively_assign_tasks([], {:ok, _}, assigned_count), do: {assigned_count + 1, 0}
 
   def get_compatible_translators_grouped_by_target_languages(%TranslationProject{} = project) do
     translators_data = get_compatible_translator_data(project)

@@ -9,7 +9,7 @@ defmodule Translations.UtilsTest do
     end
 
     test "returns single nested list unmodified" do
-      assert Utils.combine_nested_list([[1, 2, 3]]) == [1, 2, 3]
+      assert Utils.combine_nested_list([[1, 2, 3]]) == [[1, 2, 3]]
     end
 
     test "combines two nested lists correctly" do
